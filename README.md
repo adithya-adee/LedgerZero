@@ -63,3 +63,16 @@ Applies a **validated** transaction to state. Never fails - assumes validation p
 ## Block Function
 
 Hash previous hash, transactions and index (simple)
+
+A block is valid iff:
+1. block.index == last.index + 1
+2. block.prev_hash == last.hash()
+3. Every transaction:
+    - validates against current state
+    - applies cleanly in order
+
+If any step fails → reject the block.
+
+
+## Chain
+All of the validation and apply happens when we are adding a block to chain.

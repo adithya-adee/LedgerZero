@@ -1,12 +1,56 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 pub type Address = [u8; 32];
 pub type Signature = [u8; 64];
 pub type BlockHash = [u8; 32];
 
 pub const GENESIS_HASH: BlockHash = [0u8; 32];
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Chain {
+    pub blocks: Vec<Block>,
+    pub state: State,
+}
+
+impl Chain {
+    pub fn new(genesis_state: State) -> Self {
+        let genesis_block = Block {
+            index: 0,
+            prev_hash: GENESIS_HASH,
+            transactions: vec![],
+        };
+
+        Self {
+            blocks: vec![genesis_block],
+            state: genesis_state,
+        }
+    }
+
+    pub fn add_block(&mut self, block: Block) -> Result<(), ChainError> {
+        let last_block = self.blocks.last().unwrap();
+
+        if block.index != last_block.index + 1 {
+            return Err(ChainError::InvalidIndex);
+        }
+
+        if block.prev_hash != last_block.hash() {
+            return Err(ChainError::InvalidPreviousHash);
+        }
+
+        for tx in &block.transactions {
+            validate(&self.state, tx).map_err(ChainError::TransactionValidationFailed)?;
+        }
+
+        for tx in &block.transactions {
+            apply(&mut self.state, tx);
+        }
+
+        self.blocks.push(block);
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
@@ -17,8 +61,7 @@ pub struct Block {
 
 impl Block {
     pub fn hash(&self) -> BlockHash {
-        let bytes = serde_json::to_vec(self)
-            .expect("block serialization must be deterministic");
+        let bytes = serde_json::to_vec(self).expect("block serialization must be deterministic");
 
         let mut hasher = Sha256::new();
         hasher.update(bytes);
@@ -119,4 +162,11 @@ pub enum ValidationError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenesisError {
     // Add genesis-specific errors here as needed
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChainError {
+    InvalidIndex,
+    InvalidPreviousHash,
+    TransactionValidationFailed(ValidationError),
 }
