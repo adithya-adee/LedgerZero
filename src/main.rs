@@ -141,14 +141,6 @@ pub fn apply(state: &mut State, signed_tx: &SignedTransaction) {
     state.nonces.entry(receiver_address).or_insert(0);
 }
 
-pub fn genesis_initialization(state: &mut State) -> Result<(), GenesisError> {
-    Ok(())
-}
-
-fn main() {
-    println!("LedgerZero");
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidationError {
     SenderAccountNotFound,
@@ -160,13 +152,12 @@ pub enum ValidationError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GenesisError {
-    // Add genesis-specific errors here as needed
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChainError {
     InvalidIndex,
     InvalidPreviousHash,
     TransactionValidationFailed(ValidationError),
+}
+
+fn main() {
+    println!("LedgerZero");
 }
