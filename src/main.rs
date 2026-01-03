@@ -1,9 +1,30 @@
 use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub type Address = [u8; 32];
 pub type Signature = [u8; 64];
+pub type BlockHash = [u8; 32];
+
+pub const GENESIS_HASH: BlockHash = [0u8; 32];
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Block {
+    pub index: u64,
+    pub prev_hash: BlockHash,
+    pub transactions: Vec<SignedTransaction>,
+}
+
+impl Block {
+    pub fn hash(&self) -> BlockHash {
+        let bytes = serde_json::to_vec(self)
+            .expect("block serialization must be deterministic");
+
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hasher.finalize().into()
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {

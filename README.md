@@ -31,6 +31,8 @@ i.e **DETERMINISM** fails.
 How do we prevent double spend?? Because of nonce.
 old nonce => invalid transaction (double spend detected)
 
+Q. Why transactions should be ordered??
+A: Because consensus is about agreeing on the ordered log of state transitions, not just the final state; different transaction orders can lead to the same state but represent different histories, which breaks verifiable replay and fork resolution.
 
 ## Validate Function
 
@@ -57,3 +59,7 @@ Applies a **validated** transaction to state. Never fails - assumes validation p
 4. Initialize receiver nonce to 0 if new account
 
 **Contract:** Must only be called after successful validation. Panics indicate programmer error.
+
+## Block Function
+
+Hash previous hash, transactions and index (simple)
