@@ -61,7 +61,7 @@ pub struct Block {
 
 impl Block {
     pub fn hash(&self) -> BlockHash {
-        let bytes = serde_json::to_vec(self).expect("block serialization must be deterministic");
+        let bytes = postcard::to_allocvec(self).expect("block serialization must be deterministic");
 
         let mut hasher = Sha256::new();
         hasher.update(bytes);
