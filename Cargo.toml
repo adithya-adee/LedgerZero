@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ed25519-dalek = "2.2.0"
 postcard = { version = "1.0", features = ["alloc"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-big-array = "0.5"

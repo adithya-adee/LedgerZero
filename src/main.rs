@@ -1,3 +1,4 @@
+use ed25519_dalek::{Signature as Ed25519Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -5,6 +6,8 @@ use std::collections::HashMap;
 pub type Address = [u8; 32];
 pub type Signature = [u8; 64];
 pub type BlockHash = [u8; 32];
+pub type TransactionHash = [u8; 32];
+pub type PublicKeyBytes = [u8; 32];
 
 pub const GENESIS_HASH: BlockHash = [0u8; 32];
 
@@ -83,11 +86,22 @@ pub struct Transaction {
     pub nonce: u64,
 }
 
+impl Transaction {
+    pub fn hash(&self) -> TransactionHash {
+        let bytes = postcard::to_allocvec(self).expect("tx serialization must be deterministic");
+
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hasher.finalize().into()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedTransaction {
     pub tx: Transaction,
     #[serde(with = "serde_big_array::BigArray")]
     pub signature: Signature,
+    pub public_key: PublicKeyBytes,
 }
 
 pub fn validate(state: &State, signed_tx: &SignedTransaction) -> Result<(), ValidationError> {
@@ -113,6 +127,17 @@ pub fn validate(state: &State, signed_tx: &SignedTransaction) -> Result<(), Vali
 
     if signed_tx.tx.amount == 0 {
         return Err(ValidationError::ZeroAmount);
+    }
+
+    // Verify that the public key matches the claimed sender address
+    let derived_address = address_from_pubkey(&signed_tx.public_key);
+    if derived_address != *sender_address {
+        return Err(ValidationError::InvalidPublicKey);
+    }
+
+    // Verify the signature
+    if !verify_signature(&signed_tx.tx, &signed_tx.signature, &signed_tx.public_key) {
+        return Err(ValidationError::InvalidSignature);
     }
 
     Ok(())
@@ -148,6 +173,7 @@ pub enum ValidationError {
     InvalidNonce,
     InsufficientBalance,
     ZeroAmount,
+    InvalidPublicKey,
     InvalidSignature,
 }
 
@@ -160,4 +186,26 @@ pub enum ChainError {
 
 fn main() {
     println!("LedgerZero");
+}
+
+fn address_from_pubkey(pubkey: &PublicKeyBytes) -> Address {
+    let mut hasher = Sha256::new();
+    hasher.update(pubkey);
+    hasher.finalize().into()
+}
+
+fn verify_signature(tx: &Transaction, sig_bytes: &Signature, pubkey: &PublicKeyBytes) -> bool {
+    let tx_hash = tx.hash();
+
+    // Parse the public key bytes into a VerifyingKey
+    let verifying_key = match VerifyingKey::from_bytes(pubkey) {
+        Ok(vk) => vk,
+        Err(_) => return false,
+    };
+
+    // Convert our signature bytes to ed25519_dalek::Signature
+    let signature = Ed25519Signature::from_bytes(sig_bytes);
+
+    // Verify the signature against the transaction hash
+    verifying_key.verify(&tx_hash, &signature).is_ok()
 }
