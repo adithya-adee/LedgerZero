@@ -30,3 +30,30 @@ i.e **DETERMINISM** fails.
 
 How do we prevent double spend?? Because of nonce.
 old nonce => invalid transaction (double spend detected)
+
+
+## Validate Function
+
+Checks transaction validity **before** applying it to state. Returns `Result<(), ValidationError>`.
+
+**Validation checks:**
+1. Sender account exists in state
+2. Sender nonce exists
+3. Transaction nonce equals current nonce + 1 (prevents replay attacks)
+4. Sender has sufficient balance
+5. Transfer amount is greater than zero
+6. *(Signature verification - to be implemented)*
+
+**Important:** If validation fails, state remains unchanged.
+
+## Apply Function
+
+Applies a **validated** transaction to state. Never fails - assumes validation passed.
+
+**State mutations:**
+1. Deduct amount from sender balance
+2. Increment sender nonce
+3. Add amount to receiver balance (creates account if needed)
+4. Initialize receiver nonce to 0 if new account
+
+**Contract:** Must only be called after successful validation. Panics indicate programmer error.
