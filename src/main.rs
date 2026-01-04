@@ -11,6 +11,7 @@ pub type TransactionHash = [u8; 32];
 pub type PublicKeyBytes = [u8; 32];
 
 pub const GENESIS_HASH: BlockHash = [0u8; 32];
+pub const ZERO_ADDRESS: Address = [0u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chain {
@@ -23,6 +24,7 @@ impl Chain {
         let genesis_block = Block {
             index: 0,
             prev_hash: GENESIS_HASH,
+            producer: ZERO_ADDRESS,
             transactions: vec![],
         };
 
@@ -51,6 +53,10 @@ impl Chain {
             apply(&mut self.state, tx);
         }
 
+        let total_fees: u64 = block.transactions.iter().map(|tx| tx.tx.fee).sum();
+
+        *self.state.balances.entry(block.producer).or_insert(0) += total_fees;
+
         self.blocks.push(block);
         Ok(())
     }
@@ -60,6 +66,7 @@ impl Chain {
 pub struct Block {
     pub index: u64,
     pub prev_hash: BlockHash,
+    pub producer: Address,
     pub transactions: Vec<SignedTransaction>,
 }
 
@@ -84,6 +91,7 @@ pub struct Transaction {
     pub from: Address,
     pub to: Address,
     pub amount: u64,
+    pub fee: u64,
     pub nonce: u64,
 }
 
@@ -107,6 +115,11 @@ pub struct SignedTransaction {
 
 pub fn validate(state: &State, signed_tx: &SignedTransaction) -> Result<(), ValidationError> {
     let sender_address = &signed_tx.tx.from;
+    let total_amount = signed_tx
+        .tx
+        .amount
+        .checked_add(signed_tx.tx.fee)
+        .ok_or(ValidationError::InsufficientBalance)?;
 
     let sender_balance = state
         .balances
@@ -122,12 +135,16 @@ pub fn validate(state: &State, signed_tx: &SignedTransaction) -> Result<(), Vali
         return Err(ValidationError::InvalidNonce);
     }
 
-    if *sender_balance < signed_tx.tx.amount {
+    if *sender_balance < total_amount {
         return Err(ValidationError::InsufficientBalance);
     }
 
     if signed_tx.tx.amount == 0 {
         return Err(ValidationError::ZeroAmount);
+    }
+
+    if signed_tx.tx.fee == 0 {
+        return Err(ValidationError::ZeroFee);
     }
 
     // Verify that the public key matches the claimed sender address
@@ -174,6 +191,7 @@ pub enum ValidationError {
     InvalidNonce,
     InsufficientBalance,
     ZeroAmount,
+    ZeroFee,
     InvalidPublicKey,
     InvalidSignature,
 }
@@ -222,14 +240,14 @@ impl BlockStore {
     pub fn new() -> std::io::Result<Self> {
         // Create the data directory if it doesn't exist
         std::fs::create_dir_all("ledger_data")?;
-        
+
         // Open or create the blocks file with read/write permissions
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .open("ledger_data/blocks.dat")?;
-        
+
         Ok(BlockStore { file })
     }
 
@@ -273,18 +291,18 @@ impl BlockStore {
 
 pub fn startup(mut store: BlockStore, genesis_state: State) -> std::io::Result<Chain> {
     let blocks = store.load_blocks()?;
-    
+
     // If no blocks exist, return a new chain with genesis
     if blocks.is_empty() {
         return Ok(Chain::new(genesis_state));
     }
-    
+
     let mut chain = Chain::new(genesis_state);
 
     // Skip the genesis block (index 0) and replay all other blocks
     for block in blocks.into_iter().skip(1) {
         chain.add_block(block).expect("invalid chain on disk");
     }
-    
+
     Ok(chain)
 }
