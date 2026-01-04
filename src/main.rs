@@ -16,54 +16,101 @@ pub const DIFFICULTY_PREFIX_ZERO_BYTES: usize = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chain {
-    pub blocks: Vec<Block>,
+    pub blocks: HashMap<BlockHash, Block>,
+    pub meta: HashMap<BlockHash, BlockMeta>,
+    pub tip: BlockHash,
+    pub genesis_state: State,
     pub state: State,
 }
 
 impl Chain {
-    pub fn new(genesis_state: State) -> Self {
-        let genesis_block = Block {
-            index: 0,
-            prev_hash: GENESIS_HASH,
-            producer: ZERO_ADDRESS,
-            nonce: 0,
-            transactions: vec![],
-        };
+    pub fn new(genesis_state: State, genesis_block: Block) -> Self {
+        let genesis_hash = genesis_block.hash();
+
+        let mut blocks = HashMap::new();
+        let mut meta = HashMap::new();
+
+        blocks.insert(genesis_hash, genesis_block);
+        meta.insert(
+            genesis_hash,
+            BlockMeta {
+                height: 0,
+                parent: GENESIS_HASH,
+            },
+        );
 
         Self {
-            blocks: vec![genesis_block],
+            blocks,
+            meta,
+            tip: genesis_hash,
+            genesis_state: genesis_state.clone(),
             state: genesis_state,
         }
     }
 
-    pub fn add_block(&mut self, block: Block) -> Result<(), ChainError> {
-        let last_block = self.blocks.last().unwrap();
-
-        if block.index != last_block.index + 1 {
-            return Err(ChainError::InvalidIndex);
-        }
-
-        if block.prev_hash != last_block.hash() {
-            return Err(ChainError::InvalidPreviousHash);
-        }
-
+    pub fn insert_block(&mut self, block: Block) -> Result<(), ChainError> {
         if block.index != 0 && !valid_pow(&block) {
             return Err(ChainError::InvalidPoW);
         }
 
-        for tx in &block.transactions {
-            validate(&self.state, tx).map_err(ChainError::TransactionValidationFailed)?;
+        let parent_hash = block.prev_hash;
+
+        if block.index != 0 && !self.blocks.contains_key(&parent_hash) {
+            return Err(ChainError::UnknownParent);
         }
 
-        for tx in &block.transactions {
-            apply(&mut self.state, tx);
+        let parent_height = if block.index == 0 {
+            0
+        } else {
+            self.meta[&parent_hash].height
+        };
+
+        let height = parent_height + 1;
+        let hash = block.hash();
+
+        self.blocks.insert(hash, block);
+        self.meta.insert(
+            hash,
+            BlockMeta {
+                height,
+                parent: parent_hash,
+            },
+        );
+
+        if height > self.meta[&self.tip].height {
+            self.reorg_to(hash)?;
         }
 
-        let total_fees: u64 = block.transactions.iter().map(|tx| tx.tx.fee).sum();
+        Ok(())
+    }
 
-        *self.state.balances.entry(block.producer).or_insert(0) += total_fees;
+    pub fn reorg_to(&mut self, new_tip: BlockHash) -> Result<(), ChainError> {
+        // reset state
+        self.state = self.genesis_state.clone();
 
-        self.blocks.push(block);
+        let mut path: Vec<BlockHash> = Vec::new();
+        let mut cursor = new_tip;
+
+        while cursor != GENESIS_HASH {
+            path.push(cursor);
+            cursor = self.meta[&cursor].parent;
+        }
+
+        path.reverse();
+
+        for hash in path {
+            let block = &self.blocks[&hash];
+
+            for tx in &block.transactions {
+                validate(&self.state, tx).map_err(ChainError::TransactionValidationFailed)?;
+                apply(&mut self.state, tx);
+            }
+
+            let fees: u64 = block.transactions.iter().map(|t| t.tx.fee).sum();
+            *self.state.balances.entry(block.producer).or_insert(0) += fees;
+        }
+
+        self.tip = new_tip;
         Ok(())
     }
 }
@@ -85,6 +132,12 @@ impl Block {
         hasher.update(bytes);
         hasher.finalize().into()
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BlockMeta {
+    pub height: u64,
+    pub parent: BlockHash,
 }
 
 pub fn mining(block: &mut Block) {
@@ -234,6 +287,7 @@ pub enum ChainError {
     InvalidIndex,
     InvalidPreviousHash,
     InvalidPoW,
+    UnknownParent,
     TransactionValidationFailed(ValidationError),
 }
 
@@ -325,17 +379,24 @@ impl BlockStore {
 
 pub fn startup(mut store: BlockStore, genesis_state: State) -> std::io::Result<Chain> {
     let blocks = store.load_blocks()?;
+    let genesis_block = Block {
+        index: 0,
+        prev_hash: GENESIS_HASH,
+        producer: ZERO_ADDRESS,
+        nonce: 0,
+        transactions: vec![],
+    };
 
     // If no blocks exist, return a new chain with genesis
     if blocks.is_empty() {
-        return Ok(Chain::new(genesis_state));
+        return Ok(Chain::new(genesis_state, genesis_block));
     }
 
-    let mut chain = Chain::new(genesis_state);
+    let mut chain = Chain::new(genesis_state, genesis_block);
 
     // Skip the genesis block (index 0) and replay all other blocks
     for block in blocks.into_iter().skip(1) {
-        chain.add_block(block).expect("invalid chain on disk");
+        chain.insert_block(block).expect("invalid chain on disk");
     }
 
     Ok(chain)
