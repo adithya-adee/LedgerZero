@@ -199,12 +199,13 @@ pub fn apply(state: &mut State, signed_tx: &SignedTransaction) {
     let sender_address = signed_tx.tx.from;
     let receiver_address = signed_tx.tx.to;
     let transfer_amount = signed_tx.tx.amount;
+    let fee = signed_tx.tx.fee;
 
     let sender_balance = state
         .balances
         .get_mut(&sender_address)
         .expect("sender must exist after validation");
-    *sender_balance -= transfer_amount;
+    *sender_balance -= transfer_amount + fee;
 
     let sender_nonce = state
         .nonces
