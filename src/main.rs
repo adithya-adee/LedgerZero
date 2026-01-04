@@ -12,6 +12,7 @@ pub type PublicKeyBytes = [u8; 32];
 
 pub const GENESIS_HASH: BlockHash = [0u8; 32];
 pub const ZERO_ADDRESS: Address = [0u8; 32];
+pub const DIFFICULTY_PREFIX_ZEROS: usize = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chain {
@@ -25,6 +26,7 @@ impl Chain {
             index: 0,
             prev_hash: GENESIS_HASH,
             producer: ZERO_ADDRESS,
+            nonce: 0,
             transactions: vec![],
         };
 
@@ -43,6 +45,10 @@ impl Chain {
 
         if block.prev_hash != last_block.hash() {
             return Err(ChainError::InvalidPreviousHash);
+        }
+
+        if !valid_pow(&block) {
+            return Err(ChainError::InvalidPoW);
         }
 
         for tx in &block.transactions {
@@ -67,6 +73,7 @@ pub struct Block {
     pub index: u64,
     pub prev_hash: BlockHash,
     pub producer: Address,
+    pub nonce: u64,
     pub transactions: Vec<SignedTransaction>,
 }
 
@@ -78,6 +85,31 @@ impl Block {
         hasher.update(bytes);
         hasher.finalize().into()
     }
+}
+
+pub fn mining(block: &mut Block) {
+    loop {
+        let hash = block.hash();
+
+        if valid_hash(hash) {
+            break;
+        }
+
+        block.nonce += 1;
+    }
+}
+
+fn valid_hash(hash: [u8; 32]) -> bool {
+    for i in 0..DIFFICULTY_PREFIX_ZEROS {
+        if hash[i] != 0 {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn valid_pow(block: &Block) -> bool {
+    valid_hash(block.hash())
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -200,6 +232,7 @@ pub enum ValidationError {
 pub enum ChainError {
     InvalidIndex,
     InvalidPreviousHash,
+    InvalidPoW,
     TransactionValidationFailed(ValidationError),
 }
 
