@@ -111,6 +111,48 @@ If any step fails → reject the block.
 - Higher fees → higher priority for inclusion
 - Fee market emerges naturally
 
+## Fork & Reorgs
+
+### Fork Choice Rules : Longest Chain Rule
+The canonical chain is the one with the most accumulated work.
+
+- For now: accumulated work = number of blocks
+- later/ good implementation → sum of difficulty
+
+### Chain Structure
+```rust
+pub struct Chain {
+    pub blocks: HashMap<BlockHash, Block>,
+    pub meta: HashMap<BlockHash, BlockMeta>,
+    pub tip: BlockHash,
+    pub genesis_state: State,
+    pub state: State,
+}
+```
+
+> **Replay > Undo** 
+- Reply from genesis
+- Undo is complex, bug-prone & concensus risky
+
+### Fork Choice Algo
+When a new block arrives:
+
+1. Verify PoW
+2. Verify parent exists
+3. Compute height = parent.height + 1
+4. Insert block into block store
+5. Update chain tips
+6. Select best tip (highest height)
+7. If best tip ≠ current tip → **reorg**
+
+### Reorg Algo
+1. Find Common Ancestor
+2. Rebuild State
+3. Replace Canonical Chain
+
+**Update** : canonical tip, canonical blocks vector, cached state <br>
+**No Partial Undo** <br>
+**If you cannot mathematically invert every state transition, you must replay**
 
 ## Chain
 All of the validation and apply happens when we are adding a block to chain.
