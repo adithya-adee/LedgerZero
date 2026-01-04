@@ -12,7 +12,7 @@ pub type PublicKeyBytes = [u8; 32];
 
 pub const GENESIS_HASH: BlockHash = [0u8; 32];
 pub const ZERO_ADDRESS: Address = [0u8; 32];
-pub const DIFFICULTY_PREFIX_ZEROS: usize = 2;
+pub const DIFFICULTY_PREFIX_ZERO_BYTES: usize = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chain {
@@ -47,7 +47,7 @@ impl Chain {
             return Err(ChainError::InvalidPreviousHash);
         }
 
-        if !valid_pow(&block) {
+        if block.index != 0 && !valid_pow(&block) {
             return Err(ChainError::InvalidPoW);
         }
 
@@ -100,7 +100,7 @@ pub fn mining(block: &mut Block) {
 }
 
 fn valid_hash(hash: [u8; 32]) -> bool {
-    for i in 0..DIFFICULTY_PREFIX_ZEROS {
+    for i in 0..DIFFICULTY_PREFIX_ZERO_BYTES {
         if hash[i] != 0 {
             return false;
         }
