@@ -157,3 +157,34 @@ When a new block arrives:
 
 ## Chain
 All of the validation and apply happens when we are adding a block to chain.
+
+## Mempool
+
+### Implement Mempool
+
+```rust
+pub struct Mempool {
+    // account -> nonce -> tx
+    pub by_account: HashMap<Address, BTreeMap<u64, SignedTransaction>>,
+
+    // fee priority (fee, tx_hash)
+    pub priority: BTreeMap<u64, Vec<TransactionHash>>,
+}
+```
+
+### Mempool Admission Rules
+1. Stateless Check (Sign, fee and amount)
+2. State Relative Check (Nonce, Balance can cover amount + fee)
+3. Insert to mempool
+
+- Nonce should be increasing step by step for account
+
+> Mempool must:
+    1. Validate transactions against current state
+    2. Enforce nonce ordering per account
+    3. Prevent double-spend locally
+    4. Order transactions by fee priority
+    5. Evict transactions when a reorg happens
+
+Q. Why mempool validation must be stricter than block validation?
+A. Mempool validation must be stricter than block validation because blocks must never fail validation once mined, while mempool transactions are speculative; rejecting bad or borderline transactions early prevents miners from wasting work on blocks that would be invalid and protects the node from DoS and resource exhaustion.
