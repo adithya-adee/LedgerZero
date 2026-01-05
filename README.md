@@ -113,10 +113,11 @@ If any step fails → reject the block.
 
 ## Fork & Reorgs
 
-### Fork Choice Rules : Longest Chain Rule
+### Fork Choice Rules : Constant Work Addition
 The canonical chain is the one with the most accumulated work.
 
-- For now: accumulated work = number of blocks
+- before: accumulated work = number of blocks
+- now: addition of accumulated work (block work is constant == 1)
 - later/ good implementation → sum of difficulty
 
 ### Chain Structure

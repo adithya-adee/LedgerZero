@@ -36,6 +36,7 @@ impl Chain {
             BlockMeta {
                 height: 0,
                 parent: GENESIS_HASH,
+                total_work: 0
             },
         );
 
@@ -67,6 +68,11 @@ impl Chain {
 
         let height = parent_height + 1;
         let hash = block.hash();
+        let total_work = if block.index == 0 {
+            0 // Genesis block has no accumulated work
+        } else {
+            self.meta[&parent_hash].total_work + block.work()
+        };
 
         self.blocks.insert(hash, block);
         self.meta.insert(
@@ -74,10 +80,11 @@ impl Chain {
             BlockMeta {
                 height,
                 parent: parent_hash,
+                total_work,
             },
         );
 
-        if height > self.meta[&self.tip].height {
+        if total_work > self.meta[&self.tip].total_work {
             self.reorg_to(hash)?;
         }
 
@@ -132,12 +139,17 @@ impl Block {
         hasher.update(bytes);
         hasher.finalize().into()
     }
+
+    pub fn work(&self) -> u128 {
+        1
+    } 
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockMeta {
     pub height: u64,
     pub parent: BlockHash,
+    pub total_work: u128,
 }
 
 pub fn mining(block: &mut Block) {
