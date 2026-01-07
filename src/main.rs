@@ -16,7 +16,7 @@ pub const ZERO_ADDRESS: Address = [0u8; 32];
 pub const DIFFICULTY_PREFIX_ZERO_BYTES: usize = 2;
 
 pub struct Mempool {
-    // sender -> nonce -> tx
+    /// Maps sender addresses to their pending transactions, ordered by nonce
     pub by_account: HashMap<Address, BTreeMap<u64, SignedTransaction>>,
 }
 
@@ -25,6 +25,45 @@ impl Mempool {
         Self {
             by_account: HashMap::new(),
         }
+    }
+
+    pub fn insert_transaction(
+        &mut self,
+        chain: &Chain,
+        tx: SignedTransaction,
+    ) -> Result<(), MempoolError> {
+        validate(&chain.state, &tx).map_err(MempoolError::InvalidTransaction)?;
+
+        let sender = tx.tx.from;
+        let tx_nonce = tx.tx.nonce;
+
+        let state_nonce = *chain.state.nonces.get(&sender).unwrap_or(&0);
+
+        if tx_nonce <= state_nonce {
+            return Err(MempoolError::NonceTooLow);
+        }
+
+        let account_pool = self.by_account.entry(sender).or_default();
+
+        if !account_pool.is_empty() {
+            let last_nonce = *account_pool.keys().last().unwrap();
+
+            if tx_nonce != last_nonce + 1 {
+                return Err(MempoolError::NonceGap);
+            }
+        } else {
+            if tx_nonce != state_nonce + 1 {
+                return Err(MempoolError::NonceGap);
+            }
+        }
+
+        if account_pool.contains_key(&tx_nonce) {
+            return Err(MempoolError::DuplicateTransaction);
+        }
+
+        account_pool.insert(tx_nonce, tx);
+
+        Ok(())
     }
 }
 
