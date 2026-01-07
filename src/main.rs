@@ -1,6 +1,7 @@
 use ed25519_dalek::{Signature as Ed25519Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::{collections::HashMap, io::Write};
 
@@ -13,6 +14,12 @@ pub type PublicKeyBytes = [u8; 32];
 pub const GENESIS_HASH: BlockHash = [0u8; 32];
 pub const ZERO_ADDRESS: Address = [0u8; 32];
 pub const DIFFICULTY_PREFIX_ZERO_BYTES: usize = 2;
+
+pub struct Mempool {
+    // sender -> nonce -> tx
+    pub by_account: HashMap<Address, BTreeMap<u64, SignedTransaction>>,
+}
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chain {
@@ -280,6 +287,15 @@ pub fn apply(state: &mut State, signed_tx: &SignedTransaction) {
 
     *state.balances.entry(receiver_address).or_insert(0) += transfer_amount;
     state.nonces.entry(receiver_address).or_insert(0);
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MempoolError {
+    InvalidTransaction(ValidationError),
+    NonceTooLow,
+    NonceGap,
+    InsufficientBalance,
+    DuplicateTransaction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
