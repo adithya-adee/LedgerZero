@@ -20,6 +20,13 @@ pub struct Mempool {
     pub by_account: HashMap<Address, BTreeMap<u64, SignedTransaction>>,
 }
 
+impl Mempool {
+    pub fn new() -> Self {
+        Self {
+            by_account: HashMap::new(),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chain {
@@ -43,7 +50,7 @@ impl Chain {
             BlockMeta {
                 height: 0,
                 parent: GENESIS_HASH,
-                total_work: 0
+                total_work: 0,
             },
         );
 
@@ -149,7 +156,7 @@ impl Block {
 
     pub fn work(&self) -> u128 {
         1
-    } 
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
