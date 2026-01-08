@@ -188,3 +188,38 @@ pub struct Mempool {
 
 Q. Why mempool validation must be stricter than block validation?
 A. Mempool validation must be stricter than block validation because blocks must never fail validation once mined, while mempool transactions are speculative; rejecting bad or borderline transactions early prevents miners from wasting work on blocks that would be invalid and protects the node from DoS and resource exhaustion.
+
+
+## Directory Structure 
+
+```
+src/
+├── main.rs              # Entry point (3 lines)
+├── lib.rs               # Library root
+├── core/
+│   ├── mod.rs           # Module exports
+│   ├── types.rs         # Type aliases & constants
+│   ├── state.rs         # State struct + apply()
+│   ├── transaction.rs   # Transaction, SignedTransaction, validate(), ValidationError
+│   ├── block.rs         # Block, BlockMeta + hash(), work()
+│   ├── consensus.rs     # Chain, ChainError + insert_block(), reorg_to()
+│   ├── pow.rs           # mining(), valid_pow(), valid_hash()
+│   └── mempool.rs       # Mempool, MempoolError + assemble_block()
+├── node/
+│   ├── mod.rs
+│   ├── node.rs
+│   ├── miner.rs
+│   ├── gossip.rs
+│   └── seen.rs
+├── net/
+│   ├── mod.rs
+│   ├── peer.rs
+│   ├── message.rs
+│   └── transport.rs
+├── storage/
+│   ├── mod.rs           # Module exports
+│   └── block_store.rs   # BlockStore + startup()
+└── crypto/
+    ├── mod.rs           # Module exports
+    └── signature.rs     # address_from_pubkey(), verify_signature()
+```
