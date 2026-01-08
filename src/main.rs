@@ -263,6 +263,30 @@ pub struct SignedTransaction {
     pub public_key: PublicKeyBytes,
 }
 
+pub fn assemble_block(chain: &Chain, mempool: &Mempool, producer: Address) -> Block {
+    let mut temp_state = chain.state.clone();
+    let mut transactions: Vec<SignedTransaction> = Vec::new();
+
+    for (_addrs, map) in &mempool.by_account {
+        for (_nonce, tx) in map {
+            if validate(&temp_state, tx).is_ok() {
+                apply(&mut temp_state, tx);
+                transactions.push(tx.clone());
+            } else {
+                break;
+            }
+        }
+    }
+
+    Block {
+        index: 2,
+        prev_hash: chain.tip,
+        producer,
+        nonce: 0,
+        transactions,
+    }
+}
+
 pub fn validate(state: &State, signed_tx: &SignedTransaction) -> Result<(), ValidationError> {
     let sender_address = &signed_tx.tx.from;
     let total_amount = signed_tx
