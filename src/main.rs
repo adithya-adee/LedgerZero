@@ -61,6 +61,23 @@ impl Mempool {
             return Err(MempoolError::DuplicateTransaction);
         }
 
+        // Calculate pending balance usage from already-queued transactions
+        let pending_usage: u64 = account_pool
+            .values()
+            .map(|pending_tx| pending_tx.tx.amount + pending_tx.tx.fee)
+            .sum();
+
+        // Check if sender has enough balance for pending txs + new tx
+        let sender_balance = *chain.state.balances.get(&sender).unwrap_or(&0);
+        let new_tx_cost = tx.tx.amount + tx.tx.fee;
+        let total_required = pending_usage
+            .checked_add(new_tx_cost)
+            .ok_or(MempoolError::InsufficientBalance)?;
+
+        if sender_balance < total_required {
+            return Err(MempoolError::InsufficientBalance);
+        }
+
         account_pool.insert(tx_nonce, tx);
 
         Ok(())
@@ -103,35 +120,29 @@ impl Chain {
     }
 
     pub fn insert_block(&mut self, block: Block) -> Result<(), ChainError> {
-        // Only validate PoW for non-genesis blocks
-        if block.prev_hash != GENESIS_HASH && !valid_pow(&block) {
+        let hash = block.hash();
+
+        // Reject duplicate blocks
+        if self.blocks.contains_key(&hash) {
+            return Err(ChainError::DuplicateBlock);
+        }
+
+        // All blocks must have valid PoW (no exceptions)
+        if !valid_pow(&block) {
             return Err(ChainError::InvalidPoW);
         }
 
         let parent_hash = block.prev_hash;
 
-        // Genesis block has GENESIS_HASH as parent, all others must have existing parent
-        if block.prev_hash != GENESIS_HASH && !self.blocks.contains_key(&parent_hash) {
+        // Parent must exist in the chain
+        if !self.blocks.contains_key(&parent_hash) {
             return Err(ChainError::UnknownParent);
         }
 
-        let hash = block.hash();
-
-        // Calculate height based on parent
-        let parent_height = if block.prev_hash == GENESIS_HASH {
-            0
-        } else {
-            self.meta[&parent_hash].height
-        };
-
-        let height = parent_height + 1;
-
-        // Genesis block has no accumulated work
-        let total_work = if block.prev_hash == GENESIS_HASH {
-            0
-        } else {
-            self.meta[&parent_hash].total_work + block.work()
-        };
+        // Calculate height and total work based on parent
+        let parent_meta = &self.meta[&parent_hash];
+        let height = parent_meta.height + 1;
+        let total_work = parent_meta.total_work + block.work();
 
         self.blocks.insert(hash, block);
         self.meta.insert(
@@ -272,7 +283,13 @@ pub fn assemble_block(chain: &Chain, mempool: &Mempool, producer: Address) -> Bl
     let mut temp_state = chain.state.clone();
     let mut transactions: Vec<SignedTransaction> = Vec::new();
 
-    for (_addrs, map) in &mempool.by_account {
+    // Collect and sort addresses for deterministic iteration
+    let mut sorted_addresses: Vec<&Address> = mempool.by_account.keys().collect();
+    sorted_addresses.sort();
+
+    // Iterate over accounts in sorted order
+    for addr in sorted_addresses {
+        let map = &mempool.by_account[addr];
         for (_nonce, tx) in map {
             if validate(&temp_state, tx).is_ok() {
                 apply(&mut temp_state, tx);
@@ -389,6 +406,7 @@ pub enum ChainError {
     InvalidPreviousHash,
     InvalidPoW,
     UnknownParent,
+    DuplicateBlock,
     TransactionValidationFailed(ValidationError),
 }
 
