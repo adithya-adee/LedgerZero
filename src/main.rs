@@ -103,26 +103,32 @@ impl Chain {
     }
 
     pub fn insert_block(&mut self, block: Block) -> Result<(), ChainError> {
-        if block.index != 0 && !valid_pow(&block) {
+        // Only validate PoW for non-genesis blocks
+        if block.prev_hash != GENESIS_HASH && !valid_pow(&block) {
             return Err(ChainError::InvalidPoW);
         }
 
         let parent_hash = block.prev_hash;
 
-        if block.index != 0 && !self.blocks.contains_key(&parent_hash) {
+        // Genesis block has GENESIS_HASH as parent, all others must have existing parent
+        if block.prev_hash != GENESIS_HASH && !self.blocks.contains_key(&parent_hash) {
             return Err(ChainError::UnknownParent);
         }
 
-        let parent_height = if block.index == 0 {
+        let hash = block.hash();
+
+        // Calculate height based on parent
+        let parent_height = if block.prev_hash == GENESIS_HASH {
             0
         } else {
             self.meta[&parent_hash].height
         };
 
         let height = parent_height + 1;
-        let hash = block.hash();
-        let total_work = if block.index == 0 {
-            0 // Genesis block has no accumulated work
+
+        // Genesis block has no accumulated work
+        let total_work = if block.prev_hash == GENESIS_HASH {
+            0
         } else {
             self.meta[&parent_hash].total_work + block.work()
         };
@@ -177,7 +183,6 @@ impl Chain {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
-    pub index: u64,
     pub prev_hash: BlockHash,
     pub producer: Address,
     pub nonce: u64,
@@ -279,7 +284,6 @@ pub fn assemble_block(chain: &Chain, mempool: &Mempool, producer: Address) -> Bl
     }
 
     Block {
-        index: 2,
         prev_hash: chain.tip,
         producer,
         nonce: 0,
@@ -382,7 +386,6 @@ pub enum ValidationError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChainError {
-    InvalidIndex,
     InvalidPreviousHash,
     InvalidPoW,
     UnknownParent,
@@ -478,7 +481,6 @@ impl BlockStore {
 pub fn startup(mut store: BlockStore, genesis_state: State) -> std::io::Result<Chain> {
     let blocks = store.load_blocks()?;
     let genesis_block = Block {
-        index: 0,
         prev_hash: GENESIS_HASH,
         producer: ZERO_ADDRESS,
         nonce: 0,
