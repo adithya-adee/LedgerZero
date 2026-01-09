@@ -1,10 +1,7 @@
-use crate::{
-    core::transaction::SignedTransaction,
-    core::types::{Address, BlockHash},
-};
-use postcard;
+use crate::core::transaction::SignedTransaction;
+use crate::core::types::{Address, BlockHash};
+use crate::crypto::hash::sha256;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
@@ -16,11 +13,7 @@ pub struct Block {
 
 impl Block {
     pub fn hash(&self) -> BlockHash {
-        let bytes = postcard::to_allocvec(self).expect("block serialization must be deterministic");
-
-        let mut hasher = Sha256::new();
-        hasher.update(bytes);
-        hasher.finalize().into()
+        sha256(self)
     }
 
     pub fn work(&self) -> u128 {

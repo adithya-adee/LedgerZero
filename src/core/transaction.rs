@@ -1,12 +1,8 @@
-use crate::{
-    core::{
-        state::State,
-        types::{Address, PublicKeyBytes, Signature, TransactionHash},
-    },
-    crypto::signature::{address_from_pubkey, verify_signature},
-};
+use crate::core::state::State;
+use crate::core::types::{Address, PublicKeyBytes, Signature, TransactionHash};
+use crate::crypto::hash::sha256;
+use crate::crypto::signature::{address_from_pubkey, verify_signature};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transaction {
@@ -19,11 +15,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn hash(&self) -> TransactionHash {
-        let bytes = postcard::to_allocvec(self).expect("tx serialization must be deterministic");
-
-        let mut hasher = Sha256::new();
-        hasher.update(bytes);
-        hasher.finalize().into()
+        sha256(self)
     }
 }
 
@@ -75,8 +67,9 @@ pub fn validate(state: &State, signed_tx: &SignedTransaction) -> Result<(), Vali
         return Err(ValidationError::InvalidPublicKey);
     }
 
-    // Verify the signature
-    if !verify_signature(&signed_tx.tx, &signed_tx.signature, &signed_tx.public_key) {
+    // Verify the signature - now passes hash directly instead of transaction
+    let tx_hash = signed_tx.tx.hash();
+    if !verify_signature(&tx_hash, &signed_tx.signature, &signed_tx.public_key) {
         return Err(ValidationError::InvalidSignature);
     }
 

@@ -1,14 +1,13 @@
 use crate::core::pow::valid_pow;
 use crate::core::transaction::validate;
 use crate::core::{state::apply, transaction::ValidationError};
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::core::{
     block::{Block, BlockMeta},
     state::State,
-    types::{BlockHash, GENESIS_HASH},
+    types::{BlockHash, GENESIS_HASH, ZERO_ADDRESS},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -44,6 +43,30 @@ impl Chain {
             genesis_state: genesis_state.clone(),
             state: genesis_state,
         }
+    }
+
+    /// Create a chain from a list of blocks loaded from storage
+    pub fn from_blocks(genesis_state: State, blocks: Vec<Block>) -> Result<Self, ChainError> {
+        // Create genesis block if no blocks provided
+        let genesis_block = if blocks.is_empty() {
+            Block {
+                prev_hash: GENESIS_HASH,
+                producer: ZERO_ADDRESS,
+                nonce: 0,
+                transactions: vec![],
+            }
+        } else {
+            blocks[0].clone()
+        };
+
+        let mut chain = Chain::new(genesis_state, genesis_block);
+
+        // Skip genesis block and replay all others
+        for block in blocks.into_iter().skip(1) {
+            chain.insert_block(block)?;
+        }
+
+        Ok(chain)
     }
 
     pub fn insert_block(&mut self, block: Block) -> Result<(), ChainError> {

@@ -1,10 +1,4 @@
-use crate::core::consensus::Chain;
-use crate::{
-    core::block::Block,
-    core::state::State,
-    core::types::{GENESIS_HASH, ZERO_ADDRESS},
-};
-use postcard;
+use crate::core::block::Block;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 pub struct BlockStore {
@@ -63,28 +57,4 @@ impl BlockStore {
 
         Ok(blocks)
     }
-}
-
-pub fn startup(mut store: BlockStore, genesis_state: State) -> std::io::Result<Chain> {
-    let blocks = store.load_blocks()?;
-    let genesis_block = Block {
-        prev_hash: GENESIS_HASH,
-        producer: ZERO_ADDRESS,
-        nonce: 0,
-        transactions: vec![],
-    };
-
-    // If no blocks exist, return a new chain with genesis
-    if blocks.is_empty() {
-        return Ok(Chain::new(genesis_state, genesis_block));
-    }
-
-    let mut chain = Chain::new(genesis_state, genesis_block);
-
-    // Skip the genesis block (index 0) and replay all other blocks
-    for block in blocks.into_iter().skip(1) {
-        chain.insert_block(block).expect("invalid chain on disk");
-    }
-
-    Ok(chain)
 }

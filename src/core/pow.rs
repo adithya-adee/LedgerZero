@@ -1,8 +1,13 @@
-use crate::core::{block::Block, types::DIFFICULTY_PREFIX_ZERO_BYTES};
+use crate::{
+    core::{block::Block, types::DIFFICULTY_PREFIX_ZERO_BYTES},
+    crypto::hash::sha256,
+};
 
 pub fn mining(block: &mut Block) -> Result<(), ()> {
     loop {
-        let hash = block.hash();
+        let hash = sha256(
+            &postcard::to_allocvec(block).expect("block serialization must be deterministic"),
+        );
 
         if valid_hash(hash) {
             return Ok(());
@@ -22,5 +27,7 @@ fn valid_hash(hash: [u8; 32]) -> bool {
 }
 
 pub fn valid_pow(block: &Block) -> bool {
-    valid_hash(block.hash())
+    valid_hash(sha256(
+        &postcard::to_allocvec(block).expect("block serialization must be deterministic"),
+    ))
 }

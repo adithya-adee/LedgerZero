@@ -1,10 +1,9 @@
 use crate::core::block::Block;
-use crate::core::consensus::Chain;
-use crate::core::state::apply;
+use crate::core::state::{State, apply};
 use crate::core::transaction::SignedTransaction;
 use crate::core::transaction::ValidationError;
 use crate::core::transaction::validate;
-use crate::core::types::Address;
+use crate::core::types::{Address, BlockHash};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -20,17 +19,19 @@ impl Mempool {
         }
     }
 
+    /// Insert a transaction into the mempool
+    /// Now takes State instead of Chain to avoid circular dependencies
     pub fn insert_transaction(
         &mut self,
-        chain: &Chain,
+        state: &State,
         tx: SignedTransaction,
     ) -> Result<(), MempoolError> {
-        validate(&chain.state, &tx).map_err(MempoolError::InvalidTransaction)?;
+        validate(state, &tx).map_err(MempoolError::InvalidTransaction)?;
 
         let sender = tx.tx.from;
         let tx_nonce = tx.tx.nonce;
 
-        let state_nonce = *chain.state.nonces.get(&sender).unwrap_or(&0);
+        let state_nonce = *state.nonces.get(&sender).unwrap_or(&0);
 
         if tx_nonce <= state_nonce {
             return Err(MempoolError::NonceTooLow);
@@ -61,7 +62,7 @@ impl Mempool {
             .sum();
 
         // Check if sender has enough balance for pending txs + new tx
-        let sender_balance = *chain.state.balances.get(&sender).unwrap_or(&0);
+        let sender_balance = *state.balances.get(&sender).unwrap_or(&0);
         let new_tx_cost = tx.tx.amount + tx.tx.fee;
         let total_required = pending_usage
             .checked_add(new_tx_cost)
@@ -79,8 +80,13 @@ impl Mempool {
 
 /// Assembles a new block from pending mempool transactions.
 /// Iterates accounts in sorted order for deterministic block assembly.
-pub fn assemble_block(chain: &Chain, mempool: &Mempool, producer: Address) -> Block {
-    let mut temp_state = chain.state.clone();
+pub fn assemble_block(
+    state: &State,
+    tip: BlockHash,
+    mempool: &Mempool,
+    producer: Address,
+) -> Block {
+    let mut temp_state = state.clone();
     let mut transactions: Vec<SignedTransaction> = Vec::new();
 
     // Collect and sort addresses for deterministic iteration
@@ -101,7 +107,7 @@ pub fn assemble_block(chain: &Chain, mempool: &Mempool, producer: Address) -> Bl
     }
 
     Block {
-        prev_hash: chain.tip,
+        prev_hash: tip,
         producer,
         nonce: 0,
         transactions,
