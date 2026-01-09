@@ -223,3 +223,20 @@ src/
     ├── mod.rs           # Module exports
     └── signature.rs     # address_from_pubkey(), verify_signature()
 ```
+
+## Dependancy Flow
+
+crypto/          (Layer 1 - Pure utilities, no imports)
+  ↓
+core/types       (Layer 2 - Type definitions)
+  ↓
+core/state       (Layer 3 - State management)
+  ↓
+core/transaction (Layer 3 - Uses crypto utilities)
+core/block       (Layer 3)
+  ↓
+core/consensus   (Layer 4 - Orchestrates everything)
+core/pow         (Layer 4)
+core/mempool     (Layer 4 - Uses state, not chain)
+  ↓
+storage/         (Side layer - Uses core types, not consensus)
