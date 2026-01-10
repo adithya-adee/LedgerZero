@@ -9,6 +9,15 @@ pub struct State {
     pub nonces: HashMap<Address, u64>,
 }
 
+impl State {
+    pub fn new() -> Self {
+        Self {
+            balances: HashMap::new(),
+            nonces: HashMap::new(),
+        }
+    }
+}
+
 /// Applies a validated transaction to the state.
 /// Panics if called without prior validation - indicates programmer error.
 pub fn apply(state: &mut State, signed_tx: &SignedTransaction) {

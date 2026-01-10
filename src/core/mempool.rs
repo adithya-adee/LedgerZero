@@ -4,9 +4,11 @@ use crate::core::transaction::SignedTransaction;
 use crate::core::transaction::ValidationError;
 use crate::core::transaction::validate;
 use crate::core::types::{Address, BlockHash};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Mempool {
     /// Maps sender addresses to their pending transactions, ordered by nonce
     pub by_account: HashMap<Address, BTreeMap<u64, SignedTransaction>>,
@@ -116,6 +118,7 @@ pub fn assemble_block(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MempoolError {
+    InvalidBlock,
     InvalidTransaction(ValidationError),
     NonceTooLow,
     NonceGap,
