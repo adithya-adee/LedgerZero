@@ -1,9 +1,14 @@
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, RwLock};
+use std::thread;
 
 use crate::core::block::Block;
 use crate::core::transaction::SignedTransaction;
 use crate::net::gossip::{Gossip, send_gossip};
-use crate::node::node::NodeError;
+use crate::net::peer::peer_read_loop;
+use crate::node::node::{Node, NodeError};
+
+pub const HOST_ADDRESS: &str = "127.0.0.1:8080";
 
 /// Error type for transport layer operations
 #[derive(Debug)]
@@ -58,6 +63,22 @@ pub fn broadcast_block(block: &Block, streams: &mut [TcpStream]) -> Result<(), T
     for stream in streams.iter_mut() {
         // Best effort - continue even if one peer fails
         let _ = send_gossip(&gossip, stream);
+    }
+
+    Ok(())
+}
+
+// TCP Server
+pub fn start_listener(node: Arc<RwLock<Node>>) -> std::io::Result<()> {
+    let listener = bind_listener(HOST_ADDRESS)?;
+
+    for stream in listener.incoming() {
+        let stream = stream?;
+        let node_clone = Arc::clone(&node);
+
+        thread::spawn(move || {
+            let _ = peer_read_loop(stream, node_clone);
+        });
     }
 
     Ok(())

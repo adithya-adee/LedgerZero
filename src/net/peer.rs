@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, TcpStream};
+use std::sync::{Arc, RwLock};
 
 use crate::net::gossip::{GossipData, receive_gossip};
 use crate::node::node::Node;
@@ -29,16 +30,16 @@ impl PeerList {
 
 /// Main loop for reading gossip messages from a peer connection
 /// Runs indefinitely until the connection is closed or an error occurs
-pub fn peer_read_loop(mut stream: TcpStream, node: &mut Node) -> std::io::Result<()> {
+pub fn peer_read_loop(mut stream: TcpStream, node: Arc<RwLock<Node>>) -> std::io::Result<()> {
     loop {
         let gossip = receive_gossip(&mut stream)?;
 
         match gossip.data {
             GossipData::Transaction(tx) => {
-                let _ = node.on_transaction(tx);
+                let _ = node.write().unwrap().on_transaction(tx);
             }
             GossipData::Block(block) => {
-                let _ = node.on_block(block);
+                let _ = node.write().unwrap().on_block(block);
             }
         }
     }
