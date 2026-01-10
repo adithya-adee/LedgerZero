@@ -1,11 +1,9 @@
-use crate::{
-    core::{
-        block::Block, consensus::{Chain, ChainError},
-        mempool::{Mempool, MempoolError},
-        transaction::{SignedTransaction, ValidationError},
-        types::{BlockHash, TransactionHash},
-    },
-    node::peer::{Peer, PeerList},
+use crate::core::{
+    block::Block,
+    consensus::{Chain, ChainError},
+    mempool::{Mempool, MempoolError},
+    transaction::{SignedTransaction, ValidationError},
+    types::{BlockHash, TransactionHash},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -14,7 +12,6 @@ use std::collections::HashSet;
 pub struct Node {
     pub chain: Chain,
     pub mempool: Mempool,
-    pub peer_list: PeerList,
     pub seen_block_hashes: HashSet<BlockHash>,
     pub seen_tx_hashes: HashSet<TransactionHash>,
 }
@@ -24,17 +21,12 @@ impl Node {
         Self {
             chain,
             mempool: Mempool::new(),
-            peer_list: PeerList::new(),
             seen_block_hashes: HashSet::new(),
             seen_tx_hashes: HashSet::new(),
         }
     }
 
-    pub fn on_transaction(
-        &mut self,
-        source_peer: &Peer,
-        tx: SignedTransaction,
-    ) -> Result<(), NodeError> {
+    pub fn on_transaction(&mut self, tx: SignedTransaction) -> Result<(), NodeError> {
         let tx_hash = tx.tx.hash();
 
         if self.seen_tx_hashes.contains(&tx_hash) {
@@ -47,16 +39,10 @@ impl Node {
 
         self.seen_tx_hashes.insert(tx_hash);
 
-        for _peer in self.peer_list.peers.iter() {
-            if _peer != source_peer {
-                //TODO: Send to peers via TCP connection
-            }
-        }
-
         Ok(())
     }
 
-    pub fn on_block(&mut self, source_peer: &Peer, block: Block) -> Result<(), NodeError> {
+    pub fn on_block(&mut self, block: Block) -> Result<(), NodeError> {
         let block_hash = block.hash();
 
         if self.seen_block_hashes.contains(&block_hash) {
@@ -81,16 +67,11 @@ impl Node {
             }
         }
 
-        for _peer in self.peer_list.peers.iter() {
-            if _peer != source_peer {
-                //TODO: Send to peers via TCP connection
-            }
-        }
-
         Ok(())
     }
 }
 
+#[derive(Debug)]
 pub enum NodeError {
     TransactionAlreadySeen,
     BlockAlreadySeen,
