@@ -209,18 +209,17 @@ src/
 │   ├── mod.rs
 │   ├── node.rs
 │   ├── miner.rs
-│   ├── gossip.rs
-│   └── seen.rs
 ├── net/
 │   ├── mod.rs
 │   ├── peer.rs
-│   ├── message.rs
+│   ├── gossip.rs
 │   └── transport.rs
 ├── storage/
 │   ├── mod.rs           # Module exports
 │   └── block_store.rs   # BlockStore + startup()
 └── crypto/
     ├── mod.rs           # Module exports
+    ├── hash.rs          # hash()
     └── signature.rs     # address_from_pubkey(), verify_signature()
 ```
 
@@ -251,3 +250,20 @@ The Node layer handles peer-to-peer communication and ensures the local state st
 - **Peer**: Represents a single connection to another node. It manages the lifecycle of the connection and handles the low-level sending/receiving of messages.
 - **Gossip**: The protocol used to broadcast information. When a node receives a new transaction or block, it "gossips" it to all its peers.
 - **Seen Cache**: A simple filter that tracks recently processed message hashes to prevent infinite loops and redundant work during gossip.
+
+## Net
+
+### Flow
+TCP bytes
+  ↓
+Message framing (length + payload)
+  ↓
+Gossip (Transaction | Block)
+  ↓
+Node logic
+
+### Components
+- **Transport**: Manages the TCP connection and handles the low-level sending/receiving of messages.
+- **Gossip**: The protocol used to broadcast information. When a node receives a new transaction or block, it "gossips" it to all its peers.
+- **PeerList**: A list of known peers. It is used to keep track of the nodes that the node is connected to.
+- **Peer**: Represents a single connection to another node. It manages the lifecycle of the connection and handles the low-level sending/receiving of messages.
