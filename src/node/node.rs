@@ -1,10 +1,9 @@
-use crate::{
-    core::{
-        block::Block, consensus::{Chain, ChainError},
-        mempool::{Mempool, MempoolError},
-        transaction::{SignedTransaction, ValidationError},
-        types::{BlockHash, TransactionHash},
-    },
+use crate::core::{
+    block::Block,
+    consensus::{Chain, ChainError},
+    mempool::{Mempool, MempoolError},
+    transaction::{SignedTransaction, ValidationError},
+    types::{BlockHash, TransactionHash},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -27,10 +26,7 @@ impl Node {
         }
     }
 
-    pub fn on_transaction(
-        &mut self,
-        tx: SignedTransaction,
-    ) -> Result<(), NodeError> {
+    pub fn on_transaction(&mut self, tx: SignedTransaction) -> Result<(), NodeError> {
         let tx_hash = tx.tx.hash();
 
         if self.seen_tx_hashes.contains(&tx_hash) {
@@ -75,6 +71,7 @@ impl Node {
     }
 }
 
+#[derive(Debug)]
 pub enum NodeError {
     TransactionAlreadySeen,
     BlockAlreadySeen,
