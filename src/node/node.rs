@@ -5,7 +5,6 @@ use crate::{
         transaction::{SignedTransaction, ValidationError},
         types::{BlockHash, TransactionHash},
     },
-    net::peer::{Peer, PeerList},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -14,7 +13,6 @@ use std::collections::HashSet;
 pub struct Node {
     pub chain: Chain,
     pub mempool: Mempool,
-    pub peer_list: PeerList,
     pub seen_block_hashes: HashSet<BlockHash>,
     pub seen_tx_hashes: HashSet<TransactionHash>,
 }
@@ -24,7 +22,6 @@ impl Node {
         Self {
             chain,
             mempool: Mempool::new(),
-            peer_list: PeerList::new(),
             seen_block_hashes: HashSet::new(),
             seen_tx_hashes: HashSet::new(),
         }
@@ -32,7 +29,6 @@ impl Node {
 
     pub fn on_transaction(
         &mut self,
-        source_peer: &Peer,
         tx: SignedTransaction,
     ) -> Result<(), NodeError> {
         let tx_hash = tx.tx.hash();
@@ -47,16 +43,10 @@ impl Node {
 
         self.seen_tx_hashes.insert(tx_hash);
 
-        for _peer in self.peer_list.peers.iter() {
-            if _peer != source_peer {
-                //TODO: Send to peers via TCP connection
-            }
-        }
-
         Ok(())
     }
 
-    pub fn on_block(&mut self, source_peer: &Peer, block: Block) -> Result<(), NodeError> {
+    pub fn on_block(&mut self, block: Block) -> Result<(), NodeError> {
         let block_hash = block.hash();
 
         if self.seen_block_hashes.contains(&block_hash) {
@@ -78,12 +68,6 @@ impl Node {
                 if account_pool.is_empty() {
                     self.mempool.by_account.remove(&sender);
                 }
-            }
-        }
-
-        for _peer in self.peer_list.peers.iter() {
-            if _peer != source_peer {
-                //TODO: Send to peers via TCP connection
             }
         }
 
