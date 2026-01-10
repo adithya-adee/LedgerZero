@@ -1,7 +1,6 @@
 use crate::{
     core::{
-        block::Block,
-        consensus::{Chain, ChainError},
+        block::Block, consensus::{Chain, ChainError},
         mempool::{Mempool, MempoolError},
         transaction::{SignedTransaction, ValidationError},
         types::{BlockHash, TransactionHash},

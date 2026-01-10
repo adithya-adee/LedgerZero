@@ -240,3 +240,14 @@ core/pow         (Layer 4)
 core/mempool     (Layer 4 - Uses state, not chain)
   ↓
 storage/         (Side layer - Uses core types, not consensus)
+
+
+## Node
+
+The Node layer handles peer-to-peer communication and ensures the local state stays synchronized with the rest of the network.
+
+### Components
+- **Node**: The main controller that wires together the Mempool, Chain, and Network. It routes incoming messages to the appropriate subsystem.
+- **Peer**: Represents a single connection to another node. It manages the lifecycle of the connection and handles the low-level sending/receiving of messages.
+- **Gossip**: The protocol used to broadcast information. When a node receives a new transaction or block, it "gossips" it to all its peers.
+- **Seen Cache**: A simple filter that tracks recently processed message hashes to prevent infinite loops and redundant work during gossip.
