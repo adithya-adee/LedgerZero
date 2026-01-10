@@ -4,16 +4,13 @@ use std::thread;
 
 use crate::core::block::Block;
 use crate::core::transaction::SignedTransaction;
-use crate::net::gossip::{Gossip, send_gossip};
+use crate::net::gossip::{send_gossip, Gossip};
 use crate::net::peer::peer_read_loop;
-use crate::node::node::{Node, NodeError};
-
-pub const HOST_ADDRESS: &str = "127.0.0.1:8080";
+use crate::node::node::Node;
 
 /// Error type for transport layer operations
 #[derive(Debug)]
 pub enum TransportError {
-    NodeError(NodeError),
     IoError(std::io::Error),
 }
 
@@ -23,63 +20,117 @@ impl From<std::io::Error> for TransportError {
     }
 }
 
-impl From<NodeError> for TransportError {
-    fn from(err: NodeError) -> Self {
-        TransportError::NodeError(err)
-    }
-}
-
-/// Bind a TCP listener to the given address
-/// Returns a TcpListener that can be used to accept incoming connections
-pub fn bind_listener(addr: &str) -> std::io::Result<TcpListener> {
+/// Helper: Bind a TCP listener to the given address
+fn bind_listener(addr: &str) -> std::io::Result<TcpListener> {
     TcpListener::bind(addr)
 }
 
-/// Connect to a peer at the given IP address and port
-/// Returns a TcpStream if successful
-pub fn connect_to_peer(ip: &str, port: u16) -> std::io::Result<TcpStream> {
-    TcpStream::connect(format!("{}:{}", ip, port))
+/// Helper: Connect to a peer at the given address
+fn connect_peer(addr: &str) -> std::io::Result<TcpStream> {
+    TcpStream::connect(addr)
 }
 
-/// Broadcast a transaction to all connected peers
-pub fn broadcast_transaction(
-    tx: &SignedTransaction,
-    streams: &mut [TcpStream],
-) -> Result<(), TransportError> {
-    let gossip = Gossip::new_transaction(tx.clone());
+/// Server manages the blockchain node and all peer connections
+pub struct Server {
+    pub node: Arc<RwLock<Node>>,
+    listener: Option<TcpListener>,
+    peers: Arc<RwLock<Vec<TcpStream>>>,
+}
 
-    for stream in streams.iter_mut() {
-        // Best effort - continue even if one peer fails
-        let _ = send_gossip(&gossip, stream);
+impl Server {
+    /// Create a new server with the given node
+    pub fn new(node: Node) -> Self {
+        Self {
+            node: Arc::new(RwLock::new(node)),
+            listener: None,
+            peers: Arc::new(RwLock::new(Vec::new())),
+        }
     }
 
-    Ok(())
-}
+    /// Start the TCP listener on the given address
+    /// Spawns a background thread to accept incoming connections
+    pub fn start_listener(&mut self, addr: &str) -> std::io::Result<()> {
+        let listener = bind_listener(addr)?;
+        self.listener = Some(listener.try_clone()?);
 
-/// Broadcast a block to all connected peers
-pub fn broadcast_block(block: &Block, streams: &mut [TcpStream]) -> Result<(), TransportError> {
-    let gossip = Gossip::new_block(block.clone());
-
-    for stream in streams.iter_mut() {
-        // Best effort - continue even if one peer fails
-        let _ = send_gossip(&gossip, stream);
-    }
-
-    Ok(())
-}
-
-// TCP Server
-pub fn start_listener(node: Arc<RwLock<Node>>) -> std::io::Result<()> {
-    let listener = bind_listener(HOST_ADDRESS)?;
-
-    for stream in listener.incoming() {
-        let stream = stream?;
-        let node_clone = Arc::clone(&node);
+        let peers = Arc::clone(&self.peers);
+        let node = Arc::clone(&self.node);
 
         thread::spawn(move || {
-            let _ = peer_read_loop(stream, node_clone);
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(stream) => {
+                        // Clone stream for read loop
+                        if let Ok(stream_clone) = stream.try_clone() {
+                            peers.write().unwrap().push(stream);
+
+                            let node_clone = Arc::clone(&node);
+                            thread::spawn(move || {
+                                if let Err(e) = peer_read_loop(stream_clone, node_clone) {
+                                    eprintln!("Peer read loop error: {}", e);
+                                }
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to accept connection: {}", e);
+                    }
+                }
+            }
         });
+
+        Ok(())
     }
 
-    Ok(())
+    /// Connect to a peer at the given address
+    /// Adds the connection to the peer pool and spawns a read loop
+    pub fn connect_to_peer(&mut self, addr: &str) -> std::io::Result<()> {
+        let stream = connect_peer(addr)?;
+        let stream_clone = stream.try_clone()?;
+
+        self.peers.write().unwrap().push(stream);
+
+        let node = Arc::clone(&self.node);
+        thread::spawn(move || {
+            if let Err(e) = peer_read_loop(stream_clone, node) {
+                eprintln!("Peer read loop error: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    /// Broadcast a transaction to all connected peers
+    pub fn broadcast_transaction(&self, tx: &SignedTransaction) -> Result<(), TransportError> {
+        let gossip = Gossip::new_transaction(tx.clone());
+        let mut peers = self.peers.write().unwrap();
+
+        peers.retain_mut(|stream| {
+            send_gossip(&gossip, stream).is_ok()
+        });
+
+        Ok(())
+    }
+
+    /// Broadcast a block to all connected peers
+    pub fn broadcast_block(&self, block: &Block) -> Result<(), TransportError> {
+        let gossip = Gossip::new_block(block.clone());
+        let mut peers = self.peers.write().unwrap();
+
+        peers.retain_mut(|stream| {
+            send_gossip(&gossip, stream).is_ok()
+        });
+
+        Ok(())
+    }
+
+    /// Get the number of active peer connections
+    pub fn peer_count(&self) -> usize {
+        self.peers.read().unwrap().len()
+    }
+
+    /// Get a reference to the node (for reading state, etc.)
+    pub fn node(&self) -> Arc<RwLock<Node>> {
+        Arc::clone(&self.node)
+    }
 }
