@@ -5,7 +5,7 @@ use crate::{
         transaction::{SignedTransaction, ValidationError},
         types::{BlockHash, TransactionHash},
     },
-    node::peer::{Peer, PeerList},
+    net::peer::{Peer, PeerList},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
