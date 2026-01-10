@@ -267,3 +267,34 @@ Node logic
 - **Gossip**: The protocol used to broadcast information. When a node receives a new transaction or block, it "gossips" it to all its peers.
 - **PeerList**: A list of known peers. It is used to keep track of the nodes that the node is connected to.
 - **Peer**: Represents a single connection to another node. It manages the lifecycle of the connection and handles the low-level sending/receiving of messages.
+
+
+## FLOW of main.rs
+
+┌────────────────────────────────────────┐
+│          main.rs                       │
+│  ┌────────────────────────────────┐   │
+│  │  Genesis State & Block         │   │
+│  └────────────────────────────────┘   │
+│              ↓                         │
+│  ┌────────────────────────────────┐   │
+│  │  Chain ← Node                  │   │
+│  └────────────────────────────────┘   │
+│              ↓                         │
+│  ┌────────────────────────────────┐   │
+│  │  Server (Arc<RwLock>)          │   │
+│  │  - TCP Listener (127.0.0.1:800 │   │
+│  │  - Connection Pool             │   │
+│  └────────────────────────────────┘   │
+│         ↓              ↓               │
+│  ┌──────────┐   ┌──────────┐          │
+│  │ Miner    │   │ Peers    │          │
+│  │ Thread   │   │ Threads  │          │
+│  └──────────┘   └──────────┘          │
+│      │               │                 │
+│      │               ↓                 │
+│      │          Gossip Protocol        │
+│      ↓                                 │
+│  Mine Block                            │
+│  Broadcast →                           │
+└────────────────────────────────────────┘
